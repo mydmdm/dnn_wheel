@@ -47,13 +47,13 @@ def error_prob(y, y_):
 
 class activation_layer(object):
     def __init__(self, a_type):
-        if a_type == 'sigmoid':
+        if 'sigmoid' in a_type:
             self.afunc = sigmoid
             self.lfunc = sigmoid_cross_entropy
-        elif a_type == 'softmax':
+        elif 'softmax' in a_type:
             self.afunc = softmax
             self.lfunc = softmax_cross_entropy
-        elif a_type == 'relu':
+        elif 'relu' in a_type:
             self.afunc = relu
         else:
             print 'not supported %s' % (a_type)
@@ -70,11 +70,15 @@ class activation_layer(object):
 
 #%% fully connected layer
 def weights_init(shape, cfg=dict()):
+    if not ('weight_sigma' in cfg):
+        cfg['weight_sigma'] = 'he'
     w = np.random.randn(*shape)
-    if 'weight_sigma' in cfg:
-        w *= cfg['weight_sigma']
+    if cfg['weight_sigma'] == 'he':
+        w *= np.sqrt(2.0 / w.shape[0])
+    elif cfg['weight_sigma'] == 'xavier':
+        w *= np.sqrt(1.0 / w.shape[0])
     else:
-        w *= 0.01
+        w *= cfg['weight_sigma']
     return w
 
 
@@ -83,10 +87,31 @@ def bias_init(shape, cfg=dict()):
     return b
 
 
+class dropout_layer(object):
+    def __init__(self, cfg=dict()):
+        self.cfg = cfg
+
+    def forward(self, x):
+        return self.dropout_vector(x, ff=True)
+
+    def backward(self, x, gy):
+        return self.dropout_vector(gy, ff=False)
+
+    def dropout_vector(self, x_, ff=True):
+        if self.cfg['keep_prob'] == 1:
+            return x_
+        x = np.copy(x_)
+        if ff:
+            self.dropmask = np.random.rand(*x.shape) < self.cfg['keep_prob']
+        x *= self.dropmask.astype('int') / self.cfg['keep_prob']
+        return x
+
+
 class neural_layer(object):
-    def __init__(self, w_shape, b_shape, cfg=dict()):
+    def __init__(self, w_shape, b_shape, dropout=False, cfg=dict()):
         self.w = weights_init(w_shape, cfg=cfg)
         self.b = bias_init(b_shape, cfg=cfg)
+        self.dropout_en = dropout
         self.cfg = cfg
 
     def forward(self, x):
@@ -116,7 +141,9 @@ class simple_nn_model(object):
             self.add_linear_activate_layer(n_size[k], n_size[k+1], a_type[k], cfg=cfg)
 
     def add_linear_activate_layer(self, n_in, n_out, a_type, cfg=dict()):
-        self.layers.append(neural_layer([n_in, n_out], [1, n_out], cfg))
+        if 'dropout' in a_type:
+            self.layers.append(dropout_layer(cfg=cfg))
+        self.layers.append(neural_layer([n_in, n_out], [1, n_out], cfg=cfg))
         self.layers.append(activation_layer(a_type))
 
     def evaluate(self, x):
@@ -136,5 +163,6 @@ class simple_nn_model(object):
         self.grad[-1] = self.data[-1] - y_
         for k in range(n-2, -1, -1):
             self.grad[k] = self.layers[k].backward(self.data[k], self.grad[k+1])
+
 
 

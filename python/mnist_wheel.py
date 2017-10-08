@@ -28,19 +28,23 @@ n_pixel = 784
 n_label = 10
 n_hidden = 50
 
+keep_prob = 0.5
 cfg = dict()
-cfg['weight_sigma'] = 0.01
+cfg['weight_sigma'] = 'he'
 cfg['alpha'] = 1
 
-m1 = wh.simple_nn_model([784, 100, 10], ['relu', 'softmax'], cfg=cfg)
+m1 = wh.simple_nn_model([784, 300, 10], ['relu', 'dropout_softmax'], cfg=cfg)
 
-for k in range(2000):
-    bx, by = mnist.train.next_batch(100)
+for k in range(5000):
+    bx, by = mnist.train.next_batch(150)
+    cfg['keep_prob'] = keep_prob
     m1.train(bx, by)
     if (k+1) % 100 == 0:
         bx, by = mnist.validation.get()
+        cfg['keep_prob'] = 1
         m1.evaluate(bx)
         pe, E = m1.check(by)
         print ('%.2f%%' % (100*pe)), E
     if (k+1) % 1000 == 0:
-        cfg['alpha'] *= 0.1
+        cfg['alpha'] *= 0.3
+        print 'gear shift to %f' % (cfg['alpha'])
